@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Phonics.io</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1e1e2f; font-family: sans-serif; color: #fff; }
+        #gameCanvas { display: block; background: radial-gradient(circle, #2a2a40 0%, #151522 100%); }
+        #ui { position: absolute; top: 15px; left: 20px; pointer-events: none; }
+        .card { background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 10px; border: 2px solid #4ecca3; }
+        #start-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; background: rgba(0,0,0,0.9); padding: 30px; border-radius: 15px; border: 2px solid #4ecca3; }
+        button { background: #4ecca3; border: none; padding: 12px 25px; font-weight: bold; cursor: pointer; border-radius: 8px; font-size: 16px; margin-top: 15px; }
+    </style>
+    <!-- Include Socket.io client library -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="card">
+            <h3 style="margin:0; color:#4ecca3;">Multiplayer Short Vowel IO</h3>
+            <div>Score: <span id="score">0</span></div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <h2>Phonics.io Multiplayer</h2>
+        <p>Compete with classmates to collect <b>REAL</b> short vowel words!</p>
+        <button onclick="joinGame()">Join Classroom Server</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let socket;
+        let myId;
+        let players = {};
+        let bubbles = [];
+        let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+
+        window.addEventListener("mousemove", e => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            if (socket) socket.emit("playerMove", { x: mouse.x, y: mouse.y });
+        });
+
+        function joinGame() {
+            document.getElementById("start-screen").style.display = "none";
+
+            // Connect to server (Change URL to host domain if deployed online)
+            socket = io();
+
+            socket.on("connect", () => { myId = socket.id; });
+
+            socket.on("stateUpdate", (data) => {
+                players = data.players;
+                bubbles = data.bubbles;
+                checkCollisions();
+            });
+
+            socket.on("gameOver", (data) => {
+                alert(`Nonsense trap! "${data.word.toUpperCase()}" is not a real word! Correct: "${data.correct.toUpperCase()}"`);
+            });
+
+            requestAnimationFrame(draw);
+        }
+
+        function checkCollisions() {
+            if (!myId || !players[myId]) return;
+            let me = players[myId];
+
+            bubbles.forEach(b => {
+                if (Math.hypot(me.x - b.x, me.y - b.y) < me.r + b.r) {
+                    socket.emit("collectBubble", b.id);
+                }
+            });
+
+            document.getElementById("score").textContent = me.score;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw all word bubbles
+            bubbles.forEach(b => {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                ctx.fillStyle = "#3a3a5c";
+                ctx.fill();
+                ctx.strokeStyle = "#4ecca3";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 16px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(b.word, b.x, b.y);
+            });
+
+            // Draw all connected players
+            Object.values(players).forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+                ctx.strokeStyle = (p.id === myId) ? "#ffffff" : "#000000";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            });
+
+            requestAnimationFrame(draw);
+        }
+    </script>
+</body>
+</html>
